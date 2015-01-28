@@ -300,7 +300,8 @@ function create-route {
 # Robustly try to create an instance.
 # $1: The name of the instance.
 # $2: The scopes flag.
-# $3: The minion start script.
+# $3: The minion start script metadata from file.
+# $4: The ip range metadata.
 function create-minion {
   detect-project
   local attempt=0
@@ -317,7 +318,8 @@ function create-minion {
       --network "${NETWORK}" \
       $2 \
       --can-ip-forward \
-      --metadata-from-file "$3"; then
+      --metadata-from-file "$3" \
+      --metadata "$4"; then
         if (( attempt > 5 )); then
           echo -e "${color_red}Failed to create instance $1 ${color_norm}"
           exit 2
@@ -463,21 +465,27 @@ function kube-up {
   else
     scope_flags=("--no-scopes")
   fi
-  # Create the instances, 5 at a time.
-  for (( i=0; i<${#MINION_NAMES[@]}; i++)); do
-    (
+  
+  (
       echo "#! /bin/bash"
       echo "ZONE='${ZONE}'"
       echo "MASTER_NAME='${MASTER_NAME}'"
-      echo "MINION_IP_RANGE='${MINION_IP_RANGES[$i]}'"
+      echo "until MINION_IP_RANGE=\$(curl --fail --silent -H 'Metadata-Flavor: Google'\\"
+      echo "        http://metadata/computeMetadata/v1/instance/attributes/node-ip-range); do"
+      echo "    echo 'Waiting for metadata MINION_IP_RANGE...'"
+      echo "    sleep 3"
+      echo "done"
       echo "EXTRA_DOCKER_OPTS='${EXTRA_DOCKER_OPTS}'"
       echo "ENABLE_DOCKER_REGISTRY_CACHE='${ENABLE_DOCKER_REGISTRY_CACHE:-false}'"
       grep -v "^#" "${KUBE_ROOT}/cluster/gce/templates/common.sh"
       grep -v "^#" "${KUBE_ROOT}/cluster/gce/templates/salt-minion.sh"
-    ) > "${KUBE_TEMP}/minion-start-${i}.sh"
+    ) > "${KUBE_TEMP}/minion-start.sh"
 
+  # Create the instances, 5 at a time.
+  for (( i=0; i<${#MINION_NAMES[@]}; i++)); do
     local scopes_flag="${scope_flags[@]}"
-    create-minion "${MINION_NAMES[$i]}" "${scopes_flag}" "startup-script=${KUBE_TEMP}/minion-start-${i}.sh" &
+    create-minion "${MINION_NAMES[$i]}" "${scopes_flag}" \
+        "startup-script=${KUBE_TEMP}/minion-start.sh" "node-ip-range=${MINION_IP_RANGES[$i]}" &
 
     if [ $i -ne 0 ] && [ $((i%5)) -eq 0 ]; then
       echo Waiting for creation of a batch of instances at $i...

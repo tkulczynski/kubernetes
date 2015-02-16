@@ -167,3 +167,11 @@ func (v *OVirtCloud) List(filter string) ([]string, error) {
 func (v *OVirtCloud) GetNodeResources(name string) (*api.NodeResources, error) {
 	return nil, nil
 }
+
+func (v *OVirtCloud) GetNodeSpec(name string) (*api.NodeSpec, error) {
+	return nil, nil
+}
+
+func (v *OVirtCloud) Configure(name string, spec *api.NodeSpec) error {
+	return nil
+}

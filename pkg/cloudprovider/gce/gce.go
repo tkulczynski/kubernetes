@@ -17,6 +17,7 @@ limitations under the License.
 package gce_cloud
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -39,6 +40,9 @@ import (
 	"golang.org/x/oauth2/google"
 	"google.golang.org/cloud/compute/metadata"
 )
+
+var cidrMetadataKey string = "node-ip-range"
+var ErrMetadataConflict = errors.New("Metadata already set at the same key")
 
 // GCECloud is an implementation of Interface, TCPLoadBalancer and Instances for Google Compute Engine.
 type GCECloud struct {
@@ -188,6 +192,19 @@ func (gce *GCECloud) waitForRegionOp(op *compute.Operation, region string) error
 		var err error
 		time.Sleep(time.Second * 10)
 		pollOp, err = gce.service.RegionOperations.Get(gce.projectID, region, op.Name).Do()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (gce *GCECloud) waitForZoneOp(op *compute.Operation) error {
+	pollOp := op
+	for pollOp.Status != "DONE" {
+		var err error
+		time.Sleep(time.Second * 10)
+		pollOp, err = gce.service.ZoneOperations.Get(gce.projectID, gce.zone, op.Name).Do()
 		if err != nil {
 			return err
 		}
@@ -350,15 +367,9 @@ func canonicalizeMachineType(machineType string) string {
 	return machineType[ix+1:]
 }
 
-func (gce *GCECloud) GetNodeResources(name string) (*api.NodeResources, error) {
-	instance := canonicalizeInstanceName(name)
-	instanceCall := gce.service.Instances.Get(gce.projectID, gce.zone, instance)
-	res, err := instanceCall.Do()
-	if err != nil {
-		return nil, err
-	}
+func getInstanceResources(instance *compute.Instance) (*api.NodeResources, error) {
 	// TODO: actually read machine size instead of this awful hack.
-	switch canonicalizeMachineType(res.MachineType) {
+	switch canonicalizeMachineType(instance.MachineType) {
 	case "f1-micro":
 		return makeResources(1, 0.6), nil
 	case "g1-small":
@@ -374,9 +385,66 @@ func (gce *GCECloud) GetNodeResources(name string) (*api.NodeResources, error) {
 	case "n1-standard-16":
 		return makeResources(16, 30), nil
 	default:
-		glog.Errorf("unknown machine: %s", res.MachineType)
+		glog.Errorf("unknown machine: %s", instance.MachineType)
 		return nil, nil
 	}
+}
+
+func getMetadataValue(metadata *compute.Metadata, key string) string {
+	for _, item := range metadata.Items {
+		if item.Key == key {
+			return item.Value
+		}
+	}
+	return ""
+}
+
+func (gce *GCECloud) GetNodeResources(name string) (*api.NodeResources, error) {
+	instanceName := canonicalizeInstanceName(name)
+	instanceCall := gce.service.Instances.Get(gce.projectID, gce.zone, instanceName)
+	instance, err := instanceCall.Do()
+	if err != nil {
+		return nil, err
+	}
+	return getInstanceResources(instance)
+}
+
+func (gce *GCECloud) GetNodeSpec(name string) (*api.NodeSpec, error) {
+	instanceName := canonicalizeInstanceName(name)
+	instanceCall := gce.service.Instances.Get(gce.projectID, gce.zone, instanceName)
+	instance, err := instanceCall.Do()
+	if err != nil {
+		return nil, err
+	}
+	spec := &api.NodeSpec{}
+	if resources, _ := getInstanceResources(instance); resources != nil {
+		spec.Capacity = resources.Capacity
+	}
+	spec.Cidr = getMetadataValue(instance.Metadata, cidrMetadataKey)
+	return spec, nil
+}
+
+func (gce *GCECloud) Configure(name string, spec *api.NodeSpec) error {
+	instanceName := canonicalizeInstanceName(name)
+	instanceCall := gce.service.Instances.Get(gce.projectID, gce.zone, instanceName)
+	instance, err := instanceCall.Do()
+	if err != nil {
+		return err
+	}
+	if getMetadataValue(instance.Metadata, cidrMetadataKey) != "" {
+		return ErrMetadataConflict
+	}
+	instance.Metadata.Items = append(instance.Metadata.Items, &compute.MetadataItems{Key: cidrMetadataKey, Value: spec.Cidr})
+	setMetadataCall := gce.service.Instances.SetMetadata(gce.projectID, gce.zone, instanceName, instance.Metadata)
+	op, err := setMetadataCall.Do()
+	if err != nil {
+		return err
+	}
+	err = gce.waitForZoneOp(op)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (gce *GCECloud) GetZone() (cloudprovider.Zone, error) {

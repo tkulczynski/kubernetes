@@ -32,6 +32,7 @@ type FakeCloud struct {
 	IP            net.IP
 	Machines      []string
 	NodeResources *api.NodeResources
+	NodeSpec      *api.NodeSpec
 	ClusterList   []string
 	MasterName    string
 	ExternalIP    net.IP
@@ -131,4 +132,14 @@ func (f *FakeCloud) GetZone() (cloudprovider.Zone, error) {
 func (f *FakeCloud) GetNodeResources(name string) (*api.NodeResources, error) {
 	f.addCall("get-node-resources")
 	return f.NodeResources, f.Err
+}
+
+func (f *FakeCloud) GetNodeSpec(name string) (*api.NodeSpec, error) {
+	f.addCall("get-node-spec")
+	return f.NodeSpec, f.Err
+}
+
+func (f *FakeCloud) Configure(name string, spec *api.NodeSpec) error {
+	f.addCall("configure")
+	return f.Err
 }

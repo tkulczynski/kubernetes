@@ -754,6 +754,8 @@ type EndpointsList struct {
 type NodeSpec struct {
 	// Capacity represents the available resources of a node
 	Capacity ResourceList `json:"capacity,omitempty"`
+	// Cidr represents the IP range assigned to the node
+	Cidr string `json:"cidr,omitempty"`
 }
 
 // NodeStatus is information about the current status of a node.
@@ -831,7 +833,7 @@ func (rl ResourceList) Get(name ResourceName) *resource.Quantity {
 	return &q
 }
 
-// Node is a worker node in Kubernetenes
+// Node is a worker node in Kubernetes
 // The name of the node according to etcd is in ObjectMeta.Name.
 type Node struct {
 	TypeMeta   `json:",inline"`

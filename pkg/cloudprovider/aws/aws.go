@@ -188,3 +188,11 @@ func (aws *AWSCloud) List(filter string) ([]string, error) {
 func (v *AWSCloud) GetNodeResources(name string) (*api.NodeResources, error) {
 	return nil, nil
 }
+
+func (v *AWSCloud) GetNodeSpec(name string) (*api.NodeSpec, error) {
+	return nil, nil
+}
+
+func (v *AWSCloud) Configure(name string, spec *api.NodeSpec) error {
+	return nil
+}

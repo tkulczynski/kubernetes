@@ -312,14 +312,7 @@ func (i *Instances) IPAddress(name string) (net.IP, error) {
 	return net.ParseIP(ip), err
 }
 
-func (i *Instances) GetNodeResources(name string) (*api.NodeResources, error) {
-	glog.V(2).Infof("GetNodeResources(%v) called", name)
-
-	srv, err := getServerByName(i.compute, name)
-	if err != nil {
-		return nil, err
-	}
-
+func getServerResources(srv *servers.Server, flavor_to_resource map[string]*api.NodeResources) (*api.NodeResources, error) {
 	s, ok := srv.Flavor["id"]
 	if !ok {
 		return nil, ErrAttrNotFound
@@ -328,14 +321,44 @@ func (i *Instances) GetNodeResources(name string) (*api.NodeResources, error) {
 	if !ok {
 		return nil, ErrAttrNotFound
 	}
-	rsrc, ok := i.flavor_to_resource[flavId]
+	rsrc, ok := flavor_to_resource[flavId]
 	if !ok {
 		return nil, ErrNotFound
 	}
 
-	glog.V(2).Infof("GetNodeResources(%v) => %v", name, rsrc)
-
 	return rsrc, nil
+}
+
+func (i *Instances) GetNodeResources(name string) (*api.NodeResources, error) {
+	glog.V(2).Infof("GetNodeResources(%v) called", name)
+
+	srv, err := getServerByName(i.compute, name)
+	if err != nil {
+		return nil, err
+	}
+
+	//	glog.V(2).Infof("GetNodeResources(%v) => %v", name, rsrc)
+
+	return getServerResources(srv, i.flavor_to_resource)
+}
+
+func (i *Instances) GetNodeSpec(name string) (*api.NodeSpec, error) {
+	glog.V(2).Infof("GetNodeSpec(%v) called", name)
+
+	srv, err := getServerByName(i.compute, name)
+	if err != nil {
+		return nil, err
+	}
+
+	rsrc, err := getServerResources(srv, i.flavor_to_resource)
+	if err != nil {
+		return nil, err
+	}
+	return &api.NodeSpec{Capacity: rsrc.Capacity}, nil
+}
+
+func (i *Instances) Configure(name string, spec *api.NodeSpec) error {
+	return nil
 }
 
 func (os *OpenStack) Clusters() (cloudprovider.Clusters, bool) {

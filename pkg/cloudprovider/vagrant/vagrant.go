@@ -218,3 +218,11 @@ func (v *VagrantCloud) List(filter string) ([]string, error) {
 func (v *VagrantCloud) GetNodeResources(name string) (*api.NodeResources, error) {
 	return nil, nil
 }
+
+func (v *VagrantCloud) GetNodeSpec(name string) (*api.NodeSpec, error) {
+	return nil, nil
+}
+
+func (v *VagrantCloud) Configure(name string, spec *api.NodeSpec) error {
+	return nil
+}

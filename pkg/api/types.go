@@ -783,7 +783,7 @@ type NodeSpec struct {
 	Capacity ResourceList `json:"capacity,omitempty"`
 	// PodCIDR represents the pod IP range assigned to the node
 	// Note: assigning IP ranges to nodes might need to be revisited when we support migratable IPs.
-	PodCIDR string `json:"cidr,omitempty"`
+	PodCIDR string `json:"podCIDR,omitempty"`
 	// External ID of the node assigned by some machine database (e.g. a cloud provider)
 	ExternalID string `json:"externalID,omitempty"`
 }
@@ -918,13 +918,14 @@ type NamespaceList struct {
 	Items []Namespace `json:"items"`
 }
 
-// Binding is written by a scheduler to cause a pod to be bound to a host.
+// Binding ties one object to another - for example, a pod is bound to a node by a scheduler.
 type Binding struct {
-	TypeMeta   `json:",inline"`
+	TypeMeta `json:",inline"`
+	// ObjectMeta describes the object that is being bound.
 	ObjectMeta `json:"metadata,omitempty"`
 
-	PodID string `json:"podID"`
-	Host  string `json:"host"`
+	// Target is the object to bind to.
+	Target ObjectReference `json:"target"`
 }
 
 // Status is a return value for calls that don't return other objects.
@@ -1405,3 +1406,19 @@ const (
 
 	PortHeader = "port"
 )
+
+// Appends the NodeAddresses to the passed-by-pointer slice, only if they do not already exist
+func AddToNodeAddresses(addresses *[]NodeAddress, addAddresses ...NodeAddress) {
+	for _, add := range addAddresses {
+		exists := false
+		for _, existing := range *addresses {
+			if existing.Address == add.Address && existing.Type == add.Type {
+				exists = true
+				break
+			}
+		}
+		if !exists {
+			*addresses = append(*addresses, add)
+		}
+	}
+}

@@ -730,7 +730,7 @@ func init() {
 			}
 
 			if in.HostIP != "" {
-				out.Status.Addresses = append(out.Status.Addresses,
+				newer.AddToNodeAddresses(&out.Status.Addresses,
 					newer.NodeAddress{Type: newer.NodeLegacyHostIP, Address: in.HostIP})
 			}
 			out.Spec.PodCIDR = in.PodCIDR
@@ -1322,6 +1322,24 @@ func init() {
 				break
 			}
 
+			return nil
+		},
+		func(in *Binding, out *newer.Binding, s conversion.Scope) error {
+			if err := s.DefaultConvert(in, out, conversion.IgnoreMissingFields); err != nil {
+				return err
+			}
+			out.Target = newer.ObjectReference{
+				Name: in.Host,
+			}
+			out.Name = in.PodID
+			return nil
+		},
+		func(in *newer.Binding, out *Binding, s conversion.Scope) error {
+			if err := s.DefaultConvert(in, out, conversion.IgnoreMissingFields); err != nil {
+				return err
+			}
+			out.Host = in.Target.Name
+			out.PodID = in.Name
 			return nil
 		},
 	)
